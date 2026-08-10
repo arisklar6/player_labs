@@ -15,7 +15,13 @@ from crewrift.crewborg.strategy.suspicion import (
     top_suspect,
     update_suspicion,
 )
-from crewrift.crewborg.types import Belief, PerceptionFrame, PlayerEvent, PlayerRecord
+from crewrift.crewborg.types import (
+    Belief,
+    ChatEvent,
+    PerceptionFrame,
+    PlayerEvent,
+    PlayerRecord,
+)
 
 
 def _frame(tick: int, players=None, bodies=None, camera=(0, 0), mask=None) -> PerceptionFrame:
@@ -303,3 +309,68 @@ def test_top_suspect_returns_none_below_the_vote_bar() -> None:
     belief = Belief(self_role="crewmate")
     belief.suspicion = {"red": VOTE_PROBABILITY - 0.05, "blue": 0.1}
     assert top_suspect(belief) is None  # nobody confident enough ⇒ skip
+
+
+# --- meeting-chat accusations (docs/suspicion-calibration.md) ---------------
+
+
+def _chat_belief(*lines: tuple[str, str], total: int = 8) -> Belief:
+    """A crewmate belief with a roster of 8 and `lines` of (speaker, text) chat."""
+    roster = {c: PlayerRecord(color=c) for c in
+              ("red", "green", "blue", "cyan", "pink", "purple", "orange")}
+    return Belief(
+        last_tick=100, self_role="crewmate", total_player_count=total, roster=roster,
+        chat_log=[ChatEvent(tick=90 + i, speaker_color=s, text=t)
+                  for i, (s, t) in enumerate(lines)],
+    )
+
+
+def test_one_accuser_raises_suspicion_but_does_not_reach_the_vote_bar() -> None:
+    belief = _chat_belief(("green", "cyan sus: tailing me. vote cyan"))
+    update_suspicion(belief)
+    # 55% precision measured at k=1 — enough to notice, not enough to eject.
+    assert belief.suspicion["cyan"] > belief.suspicion["pink"]
+    assert belief.suspicion["cyan"] < VOTE_PROBABILITY
+    assert top_suspect(belief) is None
+
+
+def test_two_distinct_accusers_clear_the_vote_bar() -> None:
+    belief = _chat_belief(
+        ("green", "cyan sus: tailing me. vote cyan"),
+        ("blue", "agreed, vote cyan"),
+    )
+    update_suspicion(belief)
+    assert belief.suspicion["cyan"] >= VOTE_PROBABILITY
+    assert top_suspect(belief) == "cyan"
+
+
+def test_one_player_repeating_themselves_is_still_one_accuser() -> None:
+    belief = _chat_belief(
+        ("green", "cyan sus. vote cyan"),
+        ("green", "seriously, vote cyan"),
+        ("green", "everyone vote cyan now"),
+    )
+    update_suspicion(belief)
+    assert belief.suspicion["cyan"] < VOTE_PROBABILITY  # distinct accusers, not messages
+    assert top_suspect(belief) is None
+
+
+def test_self_accusation_is_ignored() -> None:
+    belief = _chat_belief(("cyan", "not me, vote cyan is wrong"))
+    update_suspicion(belief)
+    assert belief.suspicion["cyan"] == pytest.approx(belief.suspicion["pink"])
+
+
+def test_unattributed_chat_line_is_ignored() -> None:
+    belief = _chat_belief((None, "vote cyan"))  # type: ignore[arg-type]
+    update_suspicion(belief)
+    assert belief.suspicion["cyan"] == pytest.approx(belief.suspicion["pink"])
+
+
+def test_an_imposter_ignores_meeting_accusations() -> None:
+    belief = _chat_belief(
+        ("green", "vote cyan"), ("blue", "vote cyan"),
+    )
+    belief.self_role = "imposter"
+    update_suspicion(belief)
+    assert belief.suspicion == {}  # imposters know the truth; no suspicion model

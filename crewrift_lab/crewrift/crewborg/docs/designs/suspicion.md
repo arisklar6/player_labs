@@ -150,6 +150,19 @@ These are definitional (we *saw* it) and not learned.
 `VENT_WALK_MARGIN` (3 px, one tick of walking) is a perception guard for the
 vent-emergence detector, not a scoring parameter.
 
+**Social cue (over `belief.chat_log`, not the event log).**
+
+| Function | Source | Form (log-LR) | Constants | Shape / rationale |
+|---|---|---|---|---|
+| `_accusation_log_lr` | meeting chat | `ACCUSATION_LOG_LR[min(k, 3)]`, `k` = **distinct** speakers whose message matches `vote <color>` naming the target | `ln 3.04` (k=1), `ln 16.5` (k=2), `ln 24` (k≥3, capped) | **increasing in independent accusers.** k=1 deliberately stays below `VOTE_PROBABILITY` (p≈0.55 — 55% precision is not enough to eject); k=2 clears it (p≈0.87). Distinct accusers, not messages, so repetition can't stack. |
+
+Unlike every cue above, these constants are **measured, not estimated** — 619
+accusation events over 320 hosted Prime replays with exactly-known roles (see
+[`../suspicion-calibration.md`](../suspicion-calibration.md)). It is also the only
+**adversarially manipulable** cue in the model: two imposters accusing the same
+crewmate forge a k=2. Measured precision at k=2 is 86.8% in the current field, but
+re-measure whenever the field shifts.
+
 ### 3.4 How to parameterize / change a function
 
 Each function is plain Python over the event's fields (`duration_ticks`, `min_dist`,
@@ -180,6 +193,7 @@ they just map to a `0` log-LR in the deterministic Bayesian model.
 | `VOTE_PROBABILITY` | 0.8 | posterior at/above which we **vote** the top suspect out at a meeting (else skip). Ejecting an innocent helps the imposters, so it is high — but a touch below the flee bar, as a vote is a deliberate one-shot decision made with the meeting's full evidence. |
 | `PRIOR_MIN` / `PRIOR_MAX` | 1e-3 / 0.99 | clamp the prior so log-odds is finite. |
 | `WITNESSED_LOG_LR` | ln 1e6 | how strong a witnessed kill/vent is (definitional). |
+| `ACCUSATION_LOG_LR` | ln 3.04 / 16.5 / 24 | how much other players naming a suspect in meeting chat moves belief, by **distinct accuser count**. Measured (§7), not estimated. |
 | the per-event log-LR functions + their constants | §3.3 | how much each graded cue moves belief, *and its shape* vs. duration/distance. **The main thing to fit.** |
 
 **Consumers of the posterior.** `believed_imposters` (P ≥ `FLEE_PROBABILITY`) gates
@@ -285,6 +299,20 @@ weight is a guess or earned.
 | 2026-06-01 | `vent_dwell` | LR 8, flat past 3-tick crossing | hand estimate | 0 | dwell is weak (transition detector owns real venting) |
 | 2026-06-01 | `body_proximity` | LR 3 at first sight → 0 by 48 ticks (**decreasing**) | hand estimate | 0 | a skilled imposter flees; long camp ⇒ reporter ⇒ neutral |
 | 2026-06-01 | `follow_to_death` | LR 6, ramp to full by 48 ticks (**increasing**) | hand estimate | 0 | sustained shadowing of a now-dead victim |
+| 2026-08-10 | `body_proximity` | **measured LR 1.36** (vs ln 3 assumed) | replay measurement, room-resolution proxy | 320 | NOT applied — see note below. `P(cue\|imp)=0.439`, `P(cue\|crew)=0.323`, n=2 486. |
+| 2026-08-10 | `follow_to_death` | **measured LR 2.51** (vs ln 6 assumed) | replay measurement, room-resolution proxy | 320 | NOT applied — see note below. `P(cue\|imp)=0.439`, `P(cue\|crew)=0.175`, n=5 435. |
+| 2026-08-10 | `accusation` (new) | LR 3.04 / 16.5 / 24 by distinct accusers | **measured** from replays with forced (known) roles | 320 | First cue in this model fit from data rather than guessed. 619 accusation events; precision 54.9% / 86.8% / 100% vs a 28.6% prior. |
+| 2026-08-10 | `VOTE_PROBABILITY` | tried 0.65, **reverted to 0.8** | A/B `watts:v2` vs `v1`, matched + fresh | 200 | Named votes 7%→50% (p=4.6e-12) but accuracy 56%→20% (below the 29% random baseline); innocent ejections 4→32 per 60 eps. |
+
+> **Why the two measured LRs above are recorded but NOT applied.** They are
+> conservative (room-level co-location is coarser than the pixel tests the code
+> actually uses), and — more importantly — correcting them *downward* makes crewborg
+> vote **less**, not better, because its circumstantial evidence genuinely cannot
+> identify imposters. Calibration checked against crewborg's own votes shows the model
+> is well-calibrated where it acts (≥0.80 band: 81% correct, n=37) and broken only in
+> the 0.65–0.80 band it never used. Applying them is a correctness fix with no expected
+> win-rate gain; it is parked in `TODO.md`. Full analysis:
+> [`../suspicion-calibration.md`](../suspicion-calibration.md).
 
 ---
 

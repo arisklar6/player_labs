@@ -47,6 +47,7 @@ players are confirmed/die (a proper joint model is a refinement).
 from __future__ import annotations
 
 import math
+import re
 
 from crewrift.crewborg.action import KILL_RANGE_SQ
 from crewrift.crewborg.strategy.occupancy import (
@@ -88,12 +89,49 @@ FOLLOW_FULL_TICKS = 48  # the ramp reaches full at ~2 s of sustained proximity
 FOLLOW_DEATH_WINDOW_TICKS = 72  # the follow ended ~within 3 s of finding the body
 FOLLOW_LOG_LR = math.log(6.0)
 
+# Accusations heard in meeting chat — another player saying "vote <color>". This is
+# SOCIAL evidence, and it was the one signal the model had no term for at all: the
+# perception layer already decodes chat into `belief.chat_log`, but nothing consumed it.
+#
+# These weights are MEASURED, not hand-picked. Over 619 accusation events in 320 hosted
+# Crewrift Prime replays with exactly-known roles (roles forced via
+# game_config_overrides.slots), a player named by k distinct accusers in a meeting was
+# really an imposter:
+#     k=1  54.9%  (n=576)  -> LR  3.04
+#     k=2  86.8%  (n=38)   -> LR 16.50
+#     k>=3 100%   (n=5)    -> LR inf; capped below, n is far too small to trust
+# against a 28.6% prior (2 imposters among 7 others). See docs/suspicion-calibration.md.
+#
+# Deliberately, k=1 alone does NOT clear VOTE_PROBABILITY (0.4 prior odds x 3.04 = 1.22
+# => p 0.55); 55% precision is not enough to eject someone. k=2 does (0.4 x 16.5 = 6.6
+# => p 0.87), which is the intended behaviour: act when independent accusers converge.
+#
+# CAUTION: unlike the physical cues this one is adversarially manipulable — two imposters
+# who both accuse the same crewmate would forge a k=2. That is not happening in the
+# current field (86.8% precision at k=2), but re-measure whenever the field shifts.
+ACCUSATION_LOG_LR: tuple[float, ...] = (
+    0.0,              # k = 0, never accused
+    math.log(3.04),   # k = 1
+    math.log(16.5),   # k = 2
+    math.log(24.0),   # k >= 3, capped (measured inf on n=5)
+)
+_ACCUSATION_RE = re.compile(r"\bvote\s+([a-z]+)\b", re.IGNORECASE)
+
 # Flee a player once P(imposter) reaches this — a real probability, so the bar is
 # interpretable (only near-certainty triggers the reactive Flee).
 FLEE_PROBABILITY = 0.9
 # Vote a player out once P(imposter) reaches this. Ejecting an innocent helps the
-# imposters, so the bar is high but a touch below the (reactive) flee bar — a vote is
-# a deliberate, one-shot decision made with the meeting's full evidence.
+# imposters, so the bar sits below the (reactive) flee bar but still well above the
+# prior — a vote is a deliberate, one-shot decision made with the meeting's full
+# evidence.
+#
+# 2026-08-10: TRIED 0.65, REVERTED to 0.8 — see version_log.md (`watts:v2`). Lowering
+# the bar worked mechanically (named-vote share 7% -> 50%, p=4.6e-12) but the extra
+# votes were junk: accuracy fell 56% -> 20%, BELOW the ~29% random baseline, and
+# innocent crewmates ejected went 4 -> 32 over 60 episodes. The posterior is
+# well-calibrated at >=0.8 and ANTI-informative in the 0.65-0.8 band, so the fix
+# belongs in the evidence weights above (BODY_NEAR/FOLLOW/VENT_DWELL log-LRs), not in
+# this threshold. Don't re-lower it without recalibrating those first.
 VOTE_PROBABILITY = 0.8
 # Clamp the prior away from 0/1 so its log-odds stays finite.
 PRIOR_MIN, PRIOR_MAX = 1e-3, 0.99
@@ -227,6 +265,27 @@ def _graded_log_lr(belief: Belief, record: PlayerRecord) -> float:
     return vent + body + follow
 
 
+def _accusation_log_lr(belief: Belief, color: str) -> float:
+    """log-LR from *distinct* players naming `color` in this meeting's chat.
+
+    `belief.chat_log` is de-duplicated by (speaker, text) and cleared when a new
+    meeting opens, so this scores only the current meeting. Counting **distinct
+    accusers** (not messages) is what the calibration measured, and it stops one
+    player repeating themselves from stacking evidence — the same bounded-contribution
+    discipline as the `max`-per-type aggregation above.
+    """
+    accusers: set[str] = set()
+    for event in belief.chat_log:
+        speaker = event.speaker_color
+        if speaker is None or speaker == color:
+            continue  # unattributed line, or a player naming themselves
+        if any(t.lower() == color for t in _ACCUSATION_RE.findall(event.text or "")):
+            accusers.add(speaker)
+    if not accusers:
+        return 0.0
+    return ACCUSATION_LOG_LR[min(len(accusers), len(ACCUSATION_LOG_LR) - 1)]
+
+
 # --- combine into the posterior ---------------------------------------------
 
 
@@ -244,6 +303,7 @@ def _recompute(belief: Belief) -> None:
             logit += WITNESSED_LOG_LR  # any near-certain catch — overwhelming
         if record is not None:
             logit += _graded_log_lr(belief, record)
+        logit += _accusation_log_lr(belief, color)
         p = _sigmoid(logit)
         suspicion[color] = p
         if p >= FLEE_PROBABILITY:
