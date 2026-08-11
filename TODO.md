@@ -24,12 +24,13 @@ mid-session; check them back at the start of focused work.
   owner → colour, so those episodes get skipped. Use `excluded_players` in the request
   body to avoid it.
 
-## Done
-
-_None yet._
 - **Test whether the suspicion model degrades with 2 imposters.** v2's votes were 2.2x
   better than random in the 1-imposter `crewrift-prime-vote-basic` drill but 0.7x
   (anti-informative) in 2-imposter league play. Isolate it by running the drill with
   `game_config_overrides.imposterCount = 2` against the same field. If confirmed, the
   co-location evidence needs to be conditioned on the imposter count, and every
   1-imposter drill result is optimistic.
+
+## Done
+
+_None yet._
