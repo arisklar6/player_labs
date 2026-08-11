@@ -12,6 +12,7 @@ from crewrift.crewborg.strategy.suspicion import (
     FOLLOW_FULL_TICKS,
     VENT_CROSS_TICKS,
     VOTE_PROBABILITY,
+    imposter_vote_target,
     top_suspect,
     update_suspicion,
 )
@@ -374,3 +375,45 @@ def test_an_imposter_ignores_meeting_accusations() -> None:
     belief.self_role = "imposter"
     update_suspicion(belief)
     assert belief.suspicion == {}  # imposters know the truth; no suspicion model
+
+
+# --- imposter voting (docs/suspicion-calibration.md §5) ---------------------
+
+
+def _imp_belief(*lines: tuple[str, str], teammates=("blue",)) -> Belief:
+    roster = {c: PlayerRecord(color=c) for c in
+              ("red", "green", "blue", "cyan", "pink", "purple", "orange")}
+    return Belief(
+        last_tick=100, self_role="imposter", total_player_count=8, roster=roster,
+        teammate_colors=set(teammates),
+        chat_log=[ChatEvent(tick=90 + i, speaker_color=s, text=t)
+                  for i, (s, t) in enumerate(lines)],
+    )
+
+
+_CANDS = {"green", "blue", "cyan", "pink", "purple", "orange"}
+
+
+def test_imposter_never_votes_its_teammate() -> None:
+    belief = _imp_belief(("green", "vote blue"), ("cyan", "vote blue"), teammates=("blue",))
+    # the crowd is accusing our teammate; we must not pile on
+    assert imposter_vote_target(belief, _CANDS) != "blue"
+
+
+def test_imposter_bandwagons_onto_the_most_accused_crewmate() -> None:
+    belief = _imp_belief(
+        ("green", "vote pink"), ("cyan", "vote pink"), ("orange", "vote purple"),
+        teammates=("blue",),
+    )
+    assert imposter_vote_target(belief, _CANDS) == "pink"
+
+
+def test_imposter_still_votes_when_nobody_is_accused() -> None:
+    belief = _imp_belief(teammates=("blue",))
+    target = imposter_vote_target(belief, _CANDS)
+    assert target is not None and target != "blue"   # never skip, never a teammate
+
+
+def test_imposter_has_no_target_when_only_teammates_remain() -> None:
+    belief = _imp_belief(teammates=("blue", "cyan"))
+    assert imposter_vote_target(belief, {"blue", "cyan"}) is None

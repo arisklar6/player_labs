@@ -19,7 +19,7 @@ from crewrift.crewborg.strategy.meeting.context import (
     CHAT_COOLDOWN_TICKS,
     VOTE_TIMER_TICKS,
 )
-from crewrift.crewborg.strategy.suspicion import top_suspect
+from crewrift.crewborg.strategy.suspicion import imposter_vote_target, top_suspect
 from crewrift.crewborg.types import ActionState, Belief, ChatEvent, Intent
 from players.player_sdk import EmptyModeParams, Mode
 
@@ -297,4 +297,9 @@ class AttendMeetingMode(Mode[Belief, ActionState, Intent]):
         return self._fallback_vote_target(belief)
 
     def _fallback_vote_target(self, belief: Belief) -> str:
+        if belief.self_role == "imposter":
+            # Suspicion is crewmate-only, so top_suspect() is always None here and we
+            # skipped every imposter meeting. Crew ejections are how imposters reach
+            # parity — see strategy.suspicion.imposter_vote_target for the measurement.
+            return imposter_vote_target(belief, valid_vote_targets(belief)) or VOTE_SKIP
         return top_suspect(belief) or VOTE_SKIP

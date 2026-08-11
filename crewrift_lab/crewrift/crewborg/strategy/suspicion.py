@@ -274,6 +274,14 @@ def _accusation_log_lr(belief: Belief, color: str) -> float:
     player repeating themselves from stacking evidence — the same bounded-contribution
     discipline as the `max`-per-type aggregation above.
     """
+    accusers = _accusers_of(belief, color)
+    if not accusers:
+        return 0.0
+    return ACCUSATION_LOG_LR[min(len(accusers), len(ACCUSATION_LOG_LR) - 1)]
+
+
+def _accusers_of(belief: Belief, color: str) -> set[str]:
+    """Distinct players who named `color` via "vote <colour>" in this meeting's chat."""
     accusers: set[str] = set()
     for event in belief.chat_log:
         speaker = event.speaker_color
@@ -281,9 +289,34 @@ def _accusation_log_lr(belief: Belief, color: str) -> float:
             continue  # unattributed line, or a player naming themselves
         if any(t.lower() == color for t in _ACCUSATION_RE.findall(event.text or "")):
             accusers.add(speaker)
-    if not accusers:
-        return 0.0
-    return ACCUSATION_LOG_LR[min(len(accusers), len(ACCUSATION_LOG_LR) - 1)]
+    return accusers
+
+
+def imposter_vote_target(belief: Belief, candidates: set[str]) -> str | None:
+    """Which crewmate to vote out, as an IMPOSTER. `None` = no legal target.
+
+    Imposters go from 2-v-6 to parity by removing four crew, and kills alone rarely get
+    there — **crew ejections do**. Measured over 238 live Crewrift Prime imposter seats
+    (2026-08-11): the field votes a crewmate nearly every meeting (skip 10.8%), ejects
+    1.06 crew/episode and wins 79.6%. crewborg skipped 100% of its imposter votes
+    (`top_suspect` is always None for an imposter, since suspicion is crewmate-only),
+    ejected 0.56 crew/episode and won 74.1% — despite killing MORE than anyone (1.89 vs
+    1.40) and being caught LESS (15% vs 23%). The other policy that never votes as
+    imposter, `eva-00-notsus`, is the only one below us at 67.7%.
+
+    Policy: **bandwagon.** Prefer the non-teammate the crew are already accusing — that
+    both removes a crewmate and reads as cooperating with the investigation. With no
+    accusation to follow, vote a live non-teammate deterministically rather than skip.
+    Never vote a known teammate (`teammate_colors`, learned at role reveal).
+    """
+    pool = sorted(c for c in candidates if c not in belief.teammate_colors)
+    if not pool:
+        return None
+    counts = {c: len(_accusers_of(belief, c)) for c in pool}
+    best = max(counts.values())
+    if best > 0:
+        return min(c for c in pool if counts[c] == best)
+    return pool[0]
 
 
 # --- combine into the posterior ---------------------------------------------
