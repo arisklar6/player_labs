@@ -75,3 +75,55 @@ stays high (~81% → ~85%). **Risk to watch:** this is manipulable — two impos
 accuse the same crewmate would trigger a wrong ejection. Empirically that isn't happening
 in the current field (86.8% precision at 2 accusers), but it is an adaptive exploit, so
 re-measure precision whenever the field shifts.
+
+---
+
+## 4. Controlled re-test in the `crewrift-prime-vote-basic` drill
+
+Both hypotheses were re-tested in Prime's voting drill (1 forced imposter among 8, 3000
+ticks, 2 tasks/player, a guaranteed button call), 90 episodes per arm, 270 total, 0
+failures, all three arms fired back-to-back against the same field. Target composed as
+`target: {division_id, variant_id: "crewrift-prime-vote-basic"}` — note `top_n` rosters
+**require** a league/division target, so a bare `coworld_id` target 400s.
+
+| Arm | Crew win | Imposter ejected | Named votes | Vote accuracy | watts voted out |
+| --- | --- | --- | --- | --- | --- |
+| v1 (bar 0.8) | 96.7% | 5.6% | 15 / 235 | 46.7% | **0** |
+| v2 (bar 0.65) | 97.8% | 13.3% (p=0.12) | 111 / 224 (p=6e-27) | 31.5% (p=0.26) | **8** (p=0.007) |
+| v3 (accusation cue) | 97.8% | 11.1% (p=0.28) | 13 / 202 (p=1.0) | 76.9% (p=0.14) | **0** |
+
+Random baseline for a named vote here is **14.3%** (1 imposter among 7 others), not the
+28.6% of league play.
+
+**The drill has a ceiling on its headline metric.** Crew win 96.7–97.8% in every arm —
+with only 2 tasks/player the crew finish before the lone imposter matters. Use *imposter
+ejected* and *vote accuracy*, never win rate, as the target axis here.
+
+**H1 (lower the bar) — still rejected, and now with a mechanism.** It fires decisively
+and does eject the imposter more than twice as often (not significant at n=90). But it
+gets **watts itself voted out 8 times vs never** (p=0.007) — voting on weak reads makes
+you the suspect. That is a plausible mechanism for the league regression, not just lost
+precision.
+
+**H2 (accusation cue) — confirmed inert, and its apparent win was an artifact.**
+Splitting v3's 13 named votes by whether the meeting actually contained an accusation:
+
+| | votes | correct |
+| --- | --- | --- |
+| meetings **with** an accusation (cue *can* fire) | 6 | 3 (50%) |
+| meetings with **no** accusation (cue provably cannot fire) | 7 | **7 (100%)** |
+
+The entire accuracy gain sits in meetings where `_accusation_log_lr` returns 0.0 and v3
+is **byte-identical in behaviour to v1**. Same code, 7/7 versus v1's 4/10 — a crisp
+measurement of how much noise lives in a 10-vote sample. The cue did nothing.
+
+Only 5–9% of drill meetings contained any accusation (vs 71% in the batches the weights
+were fitted on), so the cue remains untested rather than disproven.
+
+**New lead — the model may degrade with multiple imposters.** v2's votes were
+*informative* in the drill (31.5% vs a 14.3% baseline = 2.2×) but *anti-informative* in
+league play (20% vs 28.6% = 0.7×). The clearest structural difference is 1 imposter vs 2:
+with two killers, "who was co-located with the victim" stops identifying a unique
+suspect. Confounded by config and field differences, so this is a hypothesis — but it is
+testable directly by overriding `imposterCount`, and it would mean the drill is
+systematically easier than the league on exactly the axis we care about.
