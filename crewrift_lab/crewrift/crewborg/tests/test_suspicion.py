@@ -417,3 +417,42 @@ def test_imposter_still_votes_when_nobody_is_accused() -> None:
 def test_imposter_has_no_target_when_only_teammates_remain() -> None:
     belief = _imp_belief(teammates=("blue", "cyan"))
     assert imposter_vote_target(belief, {"blue", "cyan"}) is None
+
+
+# --- imposter bandwagon patterns (measured; see suspicion.py BANDWAGON_PATTERNS) ------
+
+
+def test_imposter_bandwagons_on_the_sus_phrasing_not_just_vote() -> None:
+    # "<C> sus" is 4.2x more common than "vote <C>" and converts at 42% vs a 26.6% fallback
+    belief = _imp_belief(("green", "pink sus: they were tailing me"), teammates=("blue",))
+    assert imposter_vote_target(belief, _CANDS) == "pink"
+
+
+def test_imposter_does_not_accuse_the_corpse_named_in_the_message() -> None:
+    # "pink sus: next to purple's body" accuses pink; purple is the victim, not a suspect
+    belief = _imp_belief(("green", "pink sus: next to purple's body"), teammates=("blue",))
+    assert imposter_vote_target(belief, _CANDS) == "pink"
+
+
+def test_saw_kill_outranks_more_numerous_sus_claims() -> None:
+    # tier beats accuser count: one 75%-converting claim over two 42% ones
+    belief = _imp_belief(
+        ("green", "cyan sus: they were tailing me"),
+        ("orange", "cyan sus: lurking on a vent"),
+        ("purple", "saw pink kill orange"),
+        teammates=("blue",),
+    )
+    assert imposter_vote_target(belief, _CANDS) == "pink"
+
+
+def test_vented_phrasing_is_ignored_it_converts_no_better_than_the_fallback() -> None:
+    belief = _imp_belief(("green", "purple vented at tick 900"), teammates=("blue",))
+    # no usable signal -> deterministic fallback, NOT the vent claim
+    assert imposter_vote_target(belief, _CANDS) == sorted(_CANDS - {"blue"})[0]
+
+
+def test_crew_accusation_cue_still_uses_only_the_strict_vote_pattern() -> None:
+    # widening is imposter-only; the crew posterior's weights were calibrated on "vote <C>"
+    belief = _chat_belief(("green", "cyan sus: they were tailing me"))
+    update_suspicion(belief)
+    assert belief.suspicion["cyan"] == pytest.approx(belief.suspicion["pink"])

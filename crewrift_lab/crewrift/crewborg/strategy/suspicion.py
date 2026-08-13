@@ -292,6 +292,55 @@ def _accusers_of(belief: Belief, color: str) -> set[str]:
     return accusers
 
 
+# Which chat phrasings are worth bandwagoning onto, as an IMPOSTER. Teammate filtering
+# leaves only crewmates in the pool, so the quantity that matters is **P(ejected | the
+# target is a crewmate)** — not P(imposter). Measured over 2 155 chat messages in 119 live
+# league episodes:
+#     saw <C> kill   75.0%  (n=4)     rare, but decisive when it fires
+#     vote <C>       45.7%  (n=94)    what we matched before
+#     <C> sus        42.0%  (n=393)   4.2x more opportunities than "vote", nearly as good
+#     <C> vented     28.6%  (n=35)    EXCLUDED — no better than the fallback
+#     any colour     25.8%  (n=2149)  EXCLUDED — worse than the fallback, and it accuses
+#                                     corpses ("red sus: next to blue's body" names blue)
+# The alphabetical fallback converts at 26.6%, so only the first three beat doing nothing.
+# `vote <C>` alone reached a bandwagon target in just 11.4% of meetings, and bandwagon
+# targets are ejected 60.0% vs 26.6% for fallback picks (Fisher p=1.3e-4) — so the binding
+# constraint was never the rule, it was how rarely the regex matched.
+#
+# Tier is tried before accuser count: a single "saw X kill" beats two "X sus".
+# Deliberately NOT shared with the crewmate cue (`_accusers_of` / `ACCUSATION_LOG_LR`),
+# whose weights were calibrated on `vote <C>` alone — `<C> sus` is only LR ~1.8 as
+# evidence of guilt, so reusing these patterns there would overstate it.
+BANDWAGON_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
+    (re.compile(r"\bsaw\s+([a-z]+)\s+kill\b", re.IGNORECASE), 3),
+    (re.compile(r"\bvote\s+([a-z]+)\b", re.IGNORECASE), 2),
+    (re.compile(r"\b([a-z]+)\s+sus\b", re.IGNORECASE), 1),
+)
+
+
+def _bandwagon_scores(belief: Belief, pool: set[str]) -> dict[str, tuple[int, int]]:
+    """`colour -> (best pattern tier, distinct accusers)` over this meeting's chat.
+
+    Non-colour words that happen to precede "sus" simply never match `pool`, so no
+    allow-list of colour names is needed.
+    """
+    tier: dict[str, int] = {}
+    accusers: dict[str, set[str]] = {}
+    for event in belief.chat_log:
+        speaker = event.speaker_color
+        text = event.text or ""
+        if speaker is None:
+            continue
+        for pattern, weight in BANDWAGON_PATTERNS:
+            for match in pattern.finditer(text):
+                target = match.group(1).lower()
+                if target not in pool or target == speaker:
+                    continue
+                tier[target] = max(tier.get(target, 0), weight)
+                accusers.setdefault(target, set()).add(speaker)
+    return {c: (tier[c], len(accusers.get(c, ()))) for c in tier}
+
+
 def imposter_vote_target(belief: Belief, candidates: set[str]) -> str | None:
     """Which crewmate to vote out, as an IMPOSTER. `None` = no legal target.
 
@@ -312,10 +361,10 @@ def imposter_vote_target(belief: Belief, candidates: set[str]) -> str | None:
     pool = sorted(c for c in candidates if c not in belief.teammate_colors)
     if not pool:
         return None
-    counts = {c: len(_accusers_of(belief, c)) for c in pool}
-    best = max(counts.values())
-    if best > 0:
-        return min(c for c in pool if counts[c] == best)
+    scores = _bandwagon_scores(belief, set(pool))
+    if scores:
+        # highest pattern tier, then most distinct accusers, then stable by colour
+        return min(scores, key=lambda c: (-scores[c][0], -scores[c][1], c))
     return pool[0]
 
 
