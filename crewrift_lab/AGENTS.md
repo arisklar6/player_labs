@@ -1,3 +1,5 @@
+> Scope: Crewrift-specific rules for crewrift_lab/ (layered on the lab-root AGENTS.md).
+
 # crewrift_lab — agent guide
 
 The **Crewrift** corner of player_labs: where we build, evaluate, and improve
@@ -8,6 +10,14 @@ improvement loop, your role in it, the two gates, and the game-agnostic skills.
 This file is the **Crewrift-specific layer** on top of it: the game, the docs, the
 practices/preferences, and the policies we optimize. When the two disagree, the root
 defines *process*; this file defines *Crewrift*.
+
+## Hard constraints
+
+- **Mandatory LLM profile.** Crewrift LLM agents must use Haiku 4.5
+  (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) and stay below 1,800
+  quota-weighted tokens per policy episode, cumulative across all calls
+  (input + cache-write + 5 × output tokens). If the remaining budget cannot
+  cover another call, use a deterministic fallback.
 
 ## What Crewrift is
 
@@ -161,10 +171,7 @@ Docker-only with no credentials**.
   [`crewrift/suspectra/`](crewrift/suspectra/), a fork of notsus
   (`suspectra.nim`) that adds evidence voting and a bounded Bedrock/Anthropic
   **meeting LLM** (`llm_meeting.py`, invoked by path; prompts in `memory/`).
-  Crewrift LLM agents must use Haiku 4.5
-  (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) and stay below 1,800
-  quota-weighted tokens per policy episode, cumulative across all calls
-  (input + cache-write + 5 × output tokens).
+  Its LLM profile: see "Hard constraints" above.
   Upstream: `Metta-AI/players` (`players/crewrift/suspectra`). Builds in-lab via
   `tools/build_player.sh suspectra` (same Nim path as notsus).
 </content>

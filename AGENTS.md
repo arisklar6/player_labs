@@ -1,8 +1,25 @@
+> Scope: lab-wide, game-agnostic rules for player_labs (read on startup; game labs add their own AGENTS.md).
+
 # player_labs — agent guide
 
 An experimentation/optimization lab for Coworld players. This file orients agents
 working in the repo. Read it, plus [`best_practices.md`](best_practices.md) and
 [`user_preferences.md`](user_preferences.md), on startup.
+
+## Hard constraints
+
+**The two gates.** Gate 1 (yours, every iteration) is just *smoke + correctness* — did
+the change take, is it still not crashing; **never a comparative test.** Uploading a
+new version is routine and ungated (it's how you get a testable artifact for
+experience requests). Gate 2 (the human's, rare) is **league submission** — public,
+and likely to become the champion as soon as it qualifies, so hard to roll back. You
+avoid rollback by **uploading freely but not submitting** until the player is better
+and the human approves.
+
+**Propose-and-pause (do not violate).** When a thread of work finishes, **propose the
+next step and pause** — don't auto-chain into unrequested work, especially
+strategy/gameplay changes. "Let's do X" means *we* do X with the human in the loop;
+when a task is fenced as operations-only, don't drift into behavior changes.
 
 ## What this repo is — the improvement loop
 
@@ -52,18 +69,8 @@ direction.
 8. **Submit + monitor** (you, gated) — submit to the league and monitor standings
    (`coworld-policy-lifecycle` skill).
 
-**The two gates.** Gate 1 (yours, every iteration) is just *smoke + correctness* — did
-the change take, is it still not crashing; **never a comparative test.** Uploading a
-new version is routine and ungated (it's how you get a testable artifact for
-experience requests). Gate 2 (the human's, rare) is **league submission** — public,
-and likely to become the champion as soon as it qualifies, so hard to roll back. You
-avoid rollback by **uploading freely but not submitting** until the player is better
-and the human approves.
-
-**Propose-and-pause (do not violate).** When a thread of work finishes, **propose the
-next step and pause** — don't auto-chain into unrequested work, especially
-strategy/gameplay changes. "Let's do X" means *we* do X with the human in the loop;
-when a task is fenced as operations-only, don't drift into behavior changes.
+On Ari's machine, agents also follow the shared Coworld rules in `~/.claude/CLAUDE.md`
+(section "Coworld player repos"); this file and `best_practices.md` stay the lab's own process.
 
 ## Best practices
 

@@ -27,7 +27,7 @@ INPUT_HEADER = 0x84
 CHAT_HEADER = 0x81
 MASK_BITS = 0x7F
 
-# Button bit assignments (AGENTS.md §2 / design §3.3).
+# Button bit assignments (docs/crewrift-game.md, formerly AGENTS.md §2 / design §3.3).
 BTN_UP = 0x01
 BTN_DOWN = 0x02
 BTN_LEFT = 0x04

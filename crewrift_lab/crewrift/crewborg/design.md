@@ -213,7 +213,7 @@ present*.
 | `phase_signals` | interstitial text + presence of voting objects | raw signals; the phase machine lives in belief (§5) |
 | `voting` | `vote cursor`, `vote skip cursor`, `vote self marker <color>`, `vote dot <color>` (ids `10100+target*MaxPlayers+voter`), `vote timer` | cursor, tally, timer |
 
-Color names (16) and the full label vocabulary are listed in `AGENTS.md` §2.
+Color names (16) and the full label vocabulary are listed in `docs/crewrift-game.md` (moved from AGENTS.md §2).
 
 ### 4.2 Task bubbles vs. arrows
 

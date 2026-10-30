@@ -84,11 +84,11 @@ changes) — keep it under that player's lab dir, not at the lab root.
   membership (`POST /v2/league-policy-memberships/{id}/retire`); the public submission
   record persists. Treat `submit` as irreversible when deciding to do it.
 - **Attribution:** the CLI `submit` always submits as the account default player. To
-  submit under a *different* owned player identity, use the `coworld-player-swap` skill
-  (the API's `player_id` field; not exposed by the CLI).
+  submit under a *different* owned player identity, call `POST /v2/league-submissions`
+  with the API's `player_id` field (not exposed by the CLI; see `references/cli.md`).
 - **`resolve-and-upload` is NOT this flow** — it's a Coworld/*game* upload wrapper, not a
   policy one. Don't use it for policies.
 - **amd64 mandatory** (hard fail on upload); rotating league/division ids (re-resolve);
   Docker daemon needed for the push; `submit` only resolves versions you own (`--mine`).
 - Full CLI + API reference (exact flags, routes, response shapes): `references/cli.md`.
-  Verified against **coworld 0.1.20**.
+  Verified against **coworld 0.1.20**. Live manifests now need a newer client: under 0.1.20, `run-episode` rejects them (`'tags'/'replay_viewer' was unexpected`); upgrade with `uv lock --upgrade-package coworld && uv sync` (0.1.38 worked).

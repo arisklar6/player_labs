@@ -84,4 +84,4 @@ supply *zero* images).
   pull/tag the game image; once the game image and your `:dev` image are local, the run
   is offline. `cow_…` ids are stable; **names resolve to whatever is canonical now**.
 - Full CLI reference (exact flags, outputs, every gotcha): `references/cli.md`.
-- Verified against **coworld 0.1.20**.
+- Verified against **coworld 0.1.20**. Live manifests now need a newer client: under 0.1.20, `run-episode` rejects them (`'tags'/'replay_viewer' was unexpected`); upgrade with `uv lock --upgrade-package coworld && uv sync` (0.1.38 worked).

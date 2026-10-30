@@ -86,11 +86,8 @@ coworld upload-policy <image> --name <name> --run python --run -m --run your_pla
 coworld upload-policy <image> --name <name> ... --use-bedrock --bedrock-model us.amazon.nova-micro-v1:0
 ```
 
-For Crewrift, always use Haiku 4.5:
-`--bedrock-model us.anthropic.claude-haiku-4-5-20251001-v1:0`. Keep each policy
-pod below 1,800 quota-weighted tokens per episode, counted cumulatively across
-all LLM calls as input tokens + cache-write tokens + 5 × output tokens. If the
-remaining budget cannot cover another call, use a deterministic fallback.
+Game-specific model and token-budget rules live in that game's lab guide (Crewrift:
+`crewrift_lab/AGENTS.md`, "Hard constraints").
 
 For **local** testing, pass `--secret-env` / `--use-bedrock` to `coworld run-episode`
 (the `coworld-local-run` skill) — those values inject only into that run's container.
