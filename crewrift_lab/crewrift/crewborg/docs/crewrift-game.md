@@ -160,7 +160,7 @@ read their positions from the stream; get them from the static map /
 (alpha > 0 ⇒ walkable), sized to the full 1235×659 map. Built server-side at
 `buildWalkabilitySpritePixels` `global:709`; decoded by `notsus` at `np:389-406`
 (alpha-only mask). Snappy-decompress it once; `nav.py` builds the pixel-validated
-nav graph over it (§6). The only other sprite whose pixels crewborg decodes is the
+nav graph over it (design §6). The only other sprite whose pixels crewborg decodes is the
 dynamic `shadow` line-of-sight overlay (above); ignore every other sprite's pixels.
 
 **Client → server (input).** Player input is `0x84` + one **byte** bitmask
