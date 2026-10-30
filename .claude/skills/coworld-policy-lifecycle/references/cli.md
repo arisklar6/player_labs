@@ -31,7 +31,7 @@ live `coworld <cmd> --help`, and the live `/observatory/openapi.json`). Re-check
 - `--league` (required); there is **no `--division`** — placement is server-side.
 - Does: **`POST /v2/league-submissions`** `{league_id, policy_version_id}` (schema
   `V2CreateLeagueSubmissionRequest` also allows optional `player_id`, `preferences`,
-  `notes` — the CLI exposes none; `player_id` is the `coworld-player-swap` hook). Returns
+  `notes` — the CLI exposes none; `player_id` is how to submit as a different owned player). Returns
   `{id (sub_…), status, league_policy_membership_id?}`.
 - **Champion is separate.** `submit` creates a submission → async placement → a
   `league_policy_membership` in a division. Becoming champion is a distinct
